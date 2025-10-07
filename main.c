@@ -10,6 +10,10 @@
 
 #define MAGIC_NUMBER 0x0123456789ABCDEFL
 
+#define ERROR_SBRK_FAILED 0x01
+#define ERROR_NULL_BLOCK 0x02
+#define ERROR_INVALID_MAGIC_NUMBER 0x04
+
 
 typedef struct HEADER_TAG {
     struct HEADER_TAG* ptr_next;
@@ -41,6 +45,9 @@ void test_free();
 
 HEADER* HEAD = NULL;
 
+int error_value = 0;
+int error_count = 0;
+
 
 HEADER* get_block_of_size(const size_t size) {
     HEADER* cur_head = HEAD;
@@ -59,7 +66,9 @@ HEADER* allocate_block_of_size(const size_t size) {
     void* start_ptr = sbrk((long) (size + BLOCK_ADDITIONAL_SIZE));
     const void* end_ptr = sbrk(0);
     if (end_ptr == MAP_FAILED) {
-        perror("malloc_3is: sbrk failed\n");
+        error_value |= ERROR_SBRK_FAILED;
+        error_count++;
+        perror("allocate_block_of_size: sbrk failed\n");
         return NULL;
     }
 
@@ -99,6 +108,8 @@ HEADER* get_smallest_block_of_BLOCK_ADDITIONAL_SIZE(const size_t size) {
 
 HEADER* extract_block(HEADER* block) {
     if (block == NULL) {
+        error_value |= ERROR_NULL_BLOCK;
+        error_count++;
         perror("extract_block: NULL block\n");
         return NULL;
     }
@@ -133,6 +144,8 @@ void insert_block(HEADER* block) {
 
 int is_smaller_block(const HEADER* new_block, const HEADER* old_block, const size_t min_size) {
     if (new_block == NULL) {
+        error_value |= ERROR_NULL_BLOCK;
+        error_count++;
         perror("smaller_block: NULL block\n");
         return FALSE;
     }
@@ -187,6 +200,8 @@ void free_3is(void* ptr) {
     }
 
     if (check_magic_number(ptr)) {
+        error_value |= ERROR_INVALID_MAGIC_NUMBER;
+        error_count++;
         perror("free_3is: bad magic number\n");
         return;
     }
