@@ -2,9 +2,11 @@
 #include <unistd.h>
 
 #define SYS_CALL_ERROR (-1)
-#define SBRK_ERROR (void*)SYS_CALL_ERROR
+#define MAP_FAILED (void*)SYS_CALL_ERROR
 #define EXIT_SUCCESS (0)
 #define EXIT_FAILURE (-1)
+
+#define DEFAULT_MAGIC_NUMBER 0x0123456789ABCDEFL
 
 
 typedef struct HEADER_TAG {
@@ -47,12 +49,16 @@ void* malloc_3is(const size_t size) {
         return available_block;
     }
 
-    void* start_ptr = sbrk(size);
+    void* start_ptr = sbrk(size + HEADER_SIZE);
     void* end_ptr = sbrk(0);
-    if (end_ptr == SBRK_ERROR) {
+    if (end_ptr == MAP_FAILED) {
         perror("malloc_3is: sbrk failed");
         return NULL;
     }
+
+    ((HEADER*)start_ptr)->bloc_size = size;
+    ((HEADER*)start_ptr)->magic_number = DEFAULT_MAGIC_NUMBER;
+
     return start_ptr;
 }
 
