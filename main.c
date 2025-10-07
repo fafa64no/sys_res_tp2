@@ -33,6 +33,7 @@ HEADER* get_head_of_size(size_t size) {
     HEADER* cur_head = head;
     while (cur_head != NULL) {
         if (cur_head->bloc_size <= size) {
+            // Might need to split the block for optimisation
             cur_head->ptr_next->ptr_prev = cur_head->ptr_prev;
             cur_head->ptr_prev->ptr_next = cur_head->ptr_next;
             return cur_head;
