@@ -21,7 +21,7 @@ typedef struct HEADER_TAG {
 
 
 void* malloc_3is(size_t size);
-// void free_3is(const void* ptr);
+void free_3is(const void* ptr);
 long long check_magic_number(void* ptr);
 
 HEADER* get_head_of_size(size_t size);
@@ -74,6 +74,10 @@ void* malloc_3is(const size_t size) {
 }
 
 long long check_magic_number(void* ptr) {
+    if (ptr == NULL) {
+        return 0;
+    }
+
     const HEADER* head_ptr = (HEADER*) ptr;
     long long expected_magic_number = head_ptr->magic_number;
 
@@ -87,12 +91,16 @@ long long check_magic_number(void* ptr) {
 
 int main(void) {
     printf("TP2: allocateur mémoire\n");
-
-    void* test = malloc_3is(4);
-    printf("test 1: %p, magic number check: %lld\n", test, check_magic_number(test));
+    void* test;
 
     test = malloc_3is(4);
+    printf("test 1: %p, magic number check: %lld\n", test, check_magic_number(test));
+
+    test = malloc_3is(0xf4);
     printf("test 2: %p, magic number check: %lld\n", test, check_magic_number(test));
+
+    test = malloc_3is(4);
+    printf("test 3: %p, magic number check: %lld\n", test, check_magic_number(test));
 
     return EXIT_SUCCESS;
 }
