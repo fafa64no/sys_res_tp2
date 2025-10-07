@@ -20,41 +20,81 @@ typedef struct HEADER_TAG {
 
 #define HEADER_SIZE sizeof(HEADER)
 #define MAGIC_NUMBER_SIZE sizeof(long long)
+#define BLOCK_ADDITIONAL_SIZE (HEADER_SIZE + MAGIC_NUMBER_SIZE)
 
 
 void* malloc_3is(size_t size);
+void* malloc_3is_debug(size_t size);
 void free_3is(void* ptr);
 long long check_magic_number(void* ptr);
 
 HEADER* get_block_of_size(size_t size);
+HEADER* allocate_block_of_size(size_t size);
+HEADER* get_smallest_block_of_BLOCK_ADDITIONAL_SIZE(size_t size);
 HEADER* extract_block(HEADER* block);
+void insert_block(HEADER* block);
+int is_smaller_block(const HEADER* new_block, const HEADER* old_block, size_t min_size);
 
 void test_allocation();
 void test_magic_number();
 void test_free();
 
-HEADER* head = NULL;
-int do_print_allocation_type = 0;
+HEADER* HEAD = NULL;
 
 
-void enable_allocation_type_printing() {
-    do_print_allocation_type = TRUE;
-}
-
-void disable_allocation_type_printing() {
-    do_print_allocation_type = FALSE;
-}
-
-
-HEADER* get_block_of_size(size_t size) {
-    HEADER* cur_head = head;
+HEADER* get_block_of_size(const size_t size) {
+    HEADER* cur_head = HEAD;
     while (cur_head) {
-        if (cur_head->bloc_size >= size) {
+        if (cur_head->bloc_size == size) {
             return extract_block(cur_head);
         }
         cur_head = cur_head->ptr_prev;
     }
-    return NULL;
+
+    return get_smallest_block_of_BLOCK_ADDITIONAL_SIZE(size);
+}
+
+HEADER* allocate_block_of_size(const size_t size) {
+    /// TODO: Preallocate memory
+    void* start_ptr = sbrk((long) (size + BLOCK_ADDITIONAL_SIZE));
+    const void* end_ptr = sbrk(0);
+    if (end_ptr == MAP_FAILED) {
+        perror("malloc_3is: sbrk failed\n");
+        return NULL;
+    }
+
+    HEADER* header_ptr = start_ptr;
+    header_ptr->ptr_next = NULL;
+    header_ptr->ptr_prev = NULL;
+    header_ptr->bloc_size = size;
+    header_ptr->magic_number = MAGIC_NUMBER;
+    header_ptr++;
+
+    start_ptr += HEADER_SIZE + size;
+    *(long long*) start_ptr = MAGIC_NUMBER;
+
+    return header_ptr;
+}
+
+HEADER* get_smallest_block_of_BLOCK_ADDITIONAL_SIZE(const size_t size) {
+    HEADER* cur_head = HEAD;
+    HEADER* best_block = NULL;
+    while (cur_head) {
+        if (is_smaller_block(cur_head, best_block, size)) {
+            best_block = cur_head;
+        }
+        cur_head = cur_head->ptr_prev;
+    }
+
+    if (best_block == NULL) {
+        return NULL;
+    }
+
+    if (best_block->bloc_size - size > BLOCK_ADDITIONAL_SIZE) {
+        /// TODO: Split the block;
+    }
+
+    return extract_block(best_block);
 }
 
 HEADER* extract_block(HEADER* block) {
@@ -63,12 +103,11 @@ HEADER* extract_block(HEADER* block) {
         return NULL;
     }
 
-    /// TODO: Split the block if too big
-    if (block == head) {
+    if (block == HEAD) {
         if (block->ptr_prev) {
-            head = block->ptr_prev;
+            HEAD = block->ptr_prev;
         } else {
-            head = NULL;
+            HEAD = NULL;
         }
     }
 
@@ -86,6 +125,34 @@ HEADER* extract_block(HEADER* block) {
     return block;
 }
 
+void insert_block(HEADER* block) {
+    HEAD->ptr_next = block;
+    HEAD->ptr_prev = HEAD;
+    HEAD = block;
+}
+
+int is_smaller_block(const HEADER* new_block, const HEADER* old_block, const size_t min_size) {
+    if (new_block == NULL) {
+        perror("smaller_block: NULL block\n");
+        return FALSE;
+    }
+
+    if (new_block->bloc_size < min_size) {
+        return FALSE;
+    }
+
+    if (old_block == NULL) {
+        return TRUE;
+    }
+
+    if (new_block->bloc_size > old_block->bloc_size) {
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+
 void* malloc_3is(const size_t size) {
     if (size == 0) {
         return NULL;
@@ -93,34 +160,25 @@ void* malloc_3is(const size_t size) {
 
     HEADER* available_block = get_block_of_size(size);
     if (available_block) {
-        if (do_print_allocation_type) {
-            printf("malloc_3is: Reusing allocated memory\n");
-        }
         return ++available_block;
     }
 
-    /// TODO: Preallocate memory
-    void* start_ptr = sbrk((long) (size + HEADER_SIZE + MAGIC_NUMBER_SIZE));
-    void* end_ptr = sbrk(0);
-    if (end_ptr == MAP_FAILED) {
-        perror("malloc_3is: sbrk failed\n");
+    return allocate_block_of_size(size);
+}
+
+void* malloc_3is_debug(const size_t size) {
+    if (size == 0) {
         return NULL;
     }
 
-    HEADER* header_ptr = (HEADER*)start_ptr;
-    header_ptr->ptr_next = NULL;
-    header_ptr->ptr_prev = NULL;
-    header_ptr->bloc_size = size;
-    header_ptr->magic_number = MAGIC_NUMBER;
-    header_ptr++;
-
-    start_ptr += HEADER_SIZE + size;
-    *((long long*) start_ptr) = MAGIC_NUMBER;
-
-    if (do_print_allocation_type) {
-        printf("malloc_3is: New allocated memory\n");
+    HEADER* available_block = get_block_of_size(size);
+    if (available_block) {
+        printf("malloc_3is: Reusing allocated memory\n");
+        return ++available_block;
     }
-    return header_ptr;
+
+    printf("malloc_3is: New allocated memory\n");
+    return allocate_block_of_size(size);
 }
 
 void free_3is(void* ptr) {
@@ -133,14 +191,12 @@ void free_3is(void* ptr) {
         return;
     }
 
-    HEADER* head_ptr = (HEADER*) ptr;
+    HEADER* head_ptr = ptr;
     head_ptr--;
-    if (head == NULL) {
-        head = head_ptr;
+    if (HEAD == NULL) {
+        HEAD = head_ptr;
     } else {
-        head->ptr_next = head_ptr;
-        head->ptr_prev = head;
-        head = head_ptr;
+        insert_block(head_ptr);
     }
 
     /// TODO: Combine the block if adjacent
@@ -152,12 +208,12 @@ long long check_magic_number(void* ptr) {
     }
 
     // Expects a pointer after the header block
-    HEADER* head_ptr = (HEADER*) ptr;
+    const HEADER* head_ptr = ptr;
     head_ptr--;
-    long long expected_magic_number = head_ptr->magic_number;
+    const long long expected_magic_number = head_ptr->magic_number;
 
     ptr += head_ptr->bloc_size;
-    long long actual_magic_number = *((long long*) ptr);
+    const long long actual_magic_number = *(long long*) ptr;
 
     return expected_magic_number - actual_magic_number;
 }
@@ -165,7 +221,6 @@ long long check_magic_number(void* ptr) {
 
 void test_allocation() {
     printf("\n===================== TEST ALLOC =====================\n");
-    disable_allocation_type_printing();
 
     void* test = malloc_3is(0x004);
     printf("\t- test_allocation: 1st alloc %p\n", test);
@@ -179,9 +234,8 @@ void test_allocation() {
 
 void test_magic_number() {
     printf("\n================= TEST MAGIC NUMBER ==================\n");
-    disable_allocation_type_printing();
 
-    char* test = (char*) malloc_3is(2);
+    char* test = malloc_3is(2);
     printf("\t- test_magic_number: Before magic number break: magic number check: %lld\n", check_magic_number(test));
 
     test[3] = 'K';
@@ -193,21 +247,20 @@ void test_magic_number() {
 
 void test_free() {
     printf("\n====================== TEST FREE =====================\n");
-    enable_allocation_type_printing();
 
-    void* test = malloc_3is(0x0f0);
+    void* test = malloc_3is_debug(0x0f0);
     printf("\t- test_free: 1st allocation %p\n", test);
 
     free_3is(test);
-    test = malloc_3is(0x0f0);
+    test = malloc_3is_debug(0x0f0);
     printf("\t- test_free: 2nd allocation %p\n", test);
 
     free_3is(test);
-    test = malloc_3is(0xfff);
+    test = malloc_3is_debug(0xfff);
     printf("\t- test_free: 3rd allocation %p\n", test);
 
     free_3is(test);
-    test = malloc_3is(0x0f0);
+    test = malloc_3is_debug(0x0f0);
     printf("\t- test_free: 4th allocation %p\n", test);
 
     printf("==================== FIN TEST FREE ===================\n");
