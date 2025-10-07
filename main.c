@@ -6,7 +6,7 @@
 #define EXIT_SUCCESS (0)
 #define EXIT_FAILURE (-1)
 
-#define DEFAULT_MAGIC_NUMBER 0x0123456789ABCDEFL
+#define MAGIC_NUMBER 0x0123456789ABCDEFL
 
 
 typedef struct HEADER_TAG {
@@ -17,6 +17,8 @@ typedef struct HEADER_TAG {
 } HEADER;
 
 #define HEADER_SIZE sizeof(HEADER)
+#define MAGIC_NUMBER_SIZE sizeof(long long)
+
 
 void* malloc_3is(size_t size);
 // void free_3is(const void* ptr);
@@ -49,17 +51,24 @@ void* malloc_3is(const size_t size) {
         return available_block;
     }
 
-    void* start_ptr = sbrk(size + HEADER_SIZE);
+    void* start_ptr = sbrk((long) (size + HEADER_SIZE + MAGIC_NUMBER_SIZE));
     void* end_ptr = sbrk(0);
     if (end_ptr == MAP_FAILED) {
         perror("malloc_3is: sbrk failed");
         return NULL;
     }
 
-    ((HEADER*)start_ptr)->bloc_size = size;
-    ((HEADER*)start_ptr)->magic_number = DEFAULT_MAGIC_NUMBER;
+    HEADER* header_ptr = (HEADER*)start_ptr;
+    header_ptr->ptr_next = NULL;
+    header_ptr->ptr_prev = NULL;
+    header_ptr->bloc_size = size;
+    header_ptr->magic_number = MAGIC_NUMBER;
+    header_ptr++;
 
-    return start_ptr;
+    start_ptr += HEADER_SIZE + size;
+    *((long long*) start_ptr) = MAGIC_NUMBER;
+
+    return header_ptr;
 }
 
 
