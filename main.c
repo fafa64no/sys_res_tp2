@@ -30,6 +30,7 @@ HEADER* get_block_of_size(size_t size);
 HEADER* extract_block(HEADER* block);
 
 void test_allocation();
+void test_magic_number();
 void test_free();
 
 HEADER* head = NULL;
@@ -62,7 +63,7 @@ HEADER* extract_block(HEADER* block) {
         return NULL;
     }
 
-    // Might need to split the block for optimisation
+    /// TODO: Split the block if too big
     if (block == head) {
         if (block->ptr_prev) {
             head = block->ptr_prev;
@@ -98,6 +99,7 @@ void* malloc_3is(const size_t size) {
         return ++available_block;
     }
 
+    /// TODO: Preallocate memory
     void* start_ptr = sbrk((long) (size + HEADER_SIZE + MAGIC_NUMBER_SIZE));
     void* end_ptr = sbrk(0);
     if (end_ptr == MAP_FAILED) {
@@ -140,6 +142,8 @@ void free_3is(void* ptr) {
         head->ptr_prev = head;
         head = head_ptr;
     }
+
+    /// TODO: Combine the block if adjacent
 }
 
 long long check_magic_number(void* ptr) {
@@ -164,16 +168,31 @@ void test_allocation() {
     disable_allocation_type_printing();
 
     void* test = malloc_3is(0x004);
-    printf("\t- test_allocation: 1st alloc %p, magic number check: %lld\n", test, check_magic_number(test));
+    printf("\t- test_allocation: 1st alloc %p\n", test);
 
     test = malloc_3is(0x0f0);
-    printf("\t- test_allocation: 2nd alloc %p, magic number check: %lld\n", test, check_magic_number(test));
+    printf("\t- test_allocation: 2nd alloc %p\n", test);
 
     // We accept the memory leak here, so that we don't interfere with the test_free() method
+    printf("=================== FIN TEST ALLOC ===================\n");
+}
+
+void test_magic_number() {
+    printf("\n================= TEST MAGIC NUMBER ==================\n");
+    disable_allocation_type_printing();
+
+    char* test = (char*) malloc_3is(2);
+    printf("\t- test_magic_number: Before magic number break: magic number check: %lld\n", check_magic_number(test));
+
+    test[3] = 'K';
+    printf("\t- test_magic_number: After magic number break: magic number check: %lld\n", check_magic_number(test));
+
+    // We accept the memory leak here, so that we don't interfere with the test_free() method
+    printf("=============== FIN TEST MAGIC NUMBER ================\n");
 }
 
 void test_free() {
-    printf("\n==================== TEST FREE =====================\n");
+    printf("\n====================== TEST FREE =====================\n");
     enable_allocation_type_printing();
 
     void* test = malloc_3is(0x0f0);
@@ -190,6 +209,8 @@ void test_free() {
     free_3is(test);
     test = malloc_3is(0x0f0);
     printf("\t- test_free: 4th allocation %p\n", test);
+
+    printf("==================== FIN TEST FREE ===================\n");
 }
 
 
@@ -197,8 +218,8 @@ int main(void) {
     printf("TP2: allocateur mémoire\n");
 
     test_allocation();
+    test_magic_number();
     test_free();
-    test_allocation();
 
     return EXIT_SUCCESS;
 }
